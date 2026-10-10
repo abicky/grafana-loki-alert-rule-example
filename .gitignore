@@ -1,0 +1,8 @@
+.env
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+*.tfvars.json
+.terraform.tfstate.lock.info

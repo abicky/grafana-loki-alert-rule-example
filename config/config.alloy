@@ -1,0 +1,36 @@
+otelcol.receiver.otlp "logs" {
+  grpc {
+    endpoint = "0.0.0.0:4317"
+  }
+  output {
+    logs = [otelcol.processor.transform.severity.input]
+  }
+}
+
+otelcol.processor.transform "severity" {
+  log_statements {
+    context = "log"
+    statements = [
+      // Normalize custom slog texts such as ERROR+4 to the OTLP FATAL range.
+      `set(severity_text, "FATAL") where severity_number >= 21 and severity_number <= 24`,
+      // Loki's OTLP attribute mapping indexes attributes, not LogRecord fields.
+      `set(attributes["severity_text"], severity_text)`,
+    ]
+  }
+  output {
+    logs = [otelcol.processor.batch.logs.input]
+  }
+}
+
+otelcol.processor.batch "logs" {
+  timeout = "1s"
+  output {
+    logs = [otelcol.exporter.otlphttp.loki.input]
+  }
+}
+
+otelcol.exporter.otlphttp "loki" {
+  client {
+    endpoint = "http://loki:3100/otlp"
+  }
+}

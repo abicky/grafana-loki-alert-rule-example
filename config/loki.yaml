@@ -1,0 +1,45 @@
+# This file is based on /etc/loki/local-config.yaml from grafana/loki:3.7.8.
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+
+common:
+  instance_addr: 127.0.0.1
+  path_prefix: /loki
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+
+schema_config:
+  configs:
+    - from: 2020-10-24
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+ruler:
+  alertmanager_url: http://localhost:9093
+
+analytics:
+  reporting_enabled: false
+
+# Use a log-attribute mapping instead of severity_text_as_label because Grafana
+# Cloud does not allow severity_text_as_label=true. Alloy copies SeverityText
+# into a log attribute so it can be indexed here and in Grafana Cloud, reducing
+# the volume scanned by alert rules that filter on severity_text.
+# See https://grafana.com/docs/grafana-cloud/platform/security-and-account-management/account-management/cloud-stacks/grafana-dbcfg-app/logs/#otlp-label-mappings
+limits_config:
+  allow_structured_metadata: true
+  otlp_config:
+    log_attributes:
+      - action: index_label
+        attributes: [severity_text]
