@@ -1,9 +1,16 @@
 locals {
   evaluation_interval_seconds = 10
   grouping_labels             = "service_name, deployment_environment_name, error_group, exception_type, severity"
-  query_window                = "10m"
-  query_window_seconds        = tonumber(trimsuffix(local.query_window, "m")) * 60
-  severity_thresholds         = { FATAL = 0, ERROR = 1, WARN = 10 }
+  severity_settings = {
+    # Five minutes tolerates delayed delivery. A one-minute window could expire
+    # before a buffered FATAL log reaches Loki.
+    FATAL = { threshold = 0, query_window = "5m" }
+    ERROR = { threshold = 1, query_window = "10m" }
+    WARN  = { threshold = 10, query_window = "10m" }
+  }
+  query_window_seconds = { for severity, settings in local.severity_settings : severity =>
+    tonumber(trimsuffix(settings.query_window, "m")) * 60
+  }
 
   # Fallbacks keyed by exception type; log metadata takes precedence.
   runbook_urls = tomap({
@@ -134,39 +141,35 @@ locals {
     | label_format error_group=`{{ if .error_group }}{{ .error_group }}{{ else }}{{ .normalized_message }}{{ end }}`
   LOGQL
 
-  log_pipeline = <<-LOGQL
-    {service_name=${format("%q", var.service_name)}, severity_text=~"${join("|", keys(local.severity_thresholds))}"}
+  log_pipelines = { for severity in keys(local.severity_settings) : severity => <<-LOGQL
+    {service_name=${format("%q", var.service_name)}, severity_text=${format("%q", severity)}}
     ${chomp(local.fingerprint_pipeline)}
     # Use the normalized severity in both alert identity and notification grouping.
     | label_format severity=`{{ .severity_text }}`
   LOGQL
+  }
 
-  count_query = <<-LOGQL
+  count_queries = { for severity, log_pipeline in local.log_pipelines : severity => <<-LOGQL
     sum by (${local.grouping_labels}) (
       count_over_time(
-        ${indent(4, chomp(local.log_pipeline))}
-        [${local.query_window}]
+        ${indent(4, chomp(log_pipeline))}
+        [${local.severity_settings[severity].query_window}]
       )
     )
   LOGQL
+  }
 
   explore_query_annotation = <<-TEMPLATE
     {{ printf "{service_name=%q, deployment_environment_name=%q}" $labels.service_name $labels.deployment_environment_name }}
   TEMPLATE
 
-  # Constant vectors provide per-severity thresholds without scanning logs.
-  # Grafana joins these severity-only labels to the more specific count series.
-  threshold_query = join("\nor\n", [for severity, threshold in local.severity_thresholds :
-    "label_replace(vector(${threshold}), \"severity\", \"${severity}\", \"\", \".*\")"
-  ])
-
   # Select the latest error per group for notification details and the Explore time range.
-  latest_error_query = <<-LOGQL
+  latest_error_queries = { for severity, log_pipeline in local.log_pipelines : severity => <<-LOGQL
     topk by (${local.grouping_labels}) (
       1,
       max by (${local.grouping_labels}, error_message, exception_stacktrace, runbook_url, error_time_from, error_time_to) (
         max_over_time(
-          ${indent(6, chomp(local.log_pipeline))}
+          ${indent(6, chomp(log_pipeline))}
           # Include the message for notification display, but not in the labels that identify an alert.
           | label_format error_message=`{{ __line__ }}{{ if and .exception_message (not (contains .exception_message (__line__))) }}: {{ .exception_message }}{{ end }}`
           # Save the Explore time range and expose the timestamp as a numeric value for latest-log selection.
@@ -174,11 +177,12 @@ locals {
           | label_format error_time_to=`{{ unixEpochMillis (__timestamp__) }}`
           | label_format error_epoch=`{{ unixEpochMillis (__timestamp__) }}`
           | unwrap error_epoch
-          [${local.query_window}]
+          [${local.severity_settings[severity].query_window}]
         )
       )
     )
   LOGQL
+  }
 
   loki_model = {
     datasource    = { type = "loki", uid = var.loki_datasource_uid }
@@ -189,9 +193,9 @@ locals {
     maxDataPoints = 43200
   }
 
-  rules = [{
-    uid            = "demo-errors"
-    title          = "Demo application exceptions"
+  rules = [for severity in keys(local.severity_settings) : {
+    uid            = "demo-errors-${lower(severity)}"
+    title          = "Demo application exceptions (${severity})"
     condition      = "condition"
     for            = "0s"
     no_data_state  = "OK"
@@ -214,26 +218,20 @@ locals {
       explore_query = trimspace(local.explore_query_annotation)
       explore_from  = "{{ with $values.latest_error }}{{ .Labels.error_time_from }}{{ end }}"
       explore_to    = "{{ with $values.latest_error }}{{ .Labels.error_time_to }}{{ end }}"
-      description   = "Environment: {{ $labels.deployment_environment_name }}. {{ $labels.severity }} occurrences in the last ${local.query_window}: {{ $values.count.Value }}. Threshold: > {{ $values.threshold.Value }}."
+      description   = "Environment: {{ $labels.deployment_environment_name }}. {{ $labels.severity }} occurrences in the last ${local.severity_settings[severity].query_window}: {{ $values.count.Value }}. Threshold: > ${local.severity_settings[severity].threshold}."
     }
     data = [
       {
         ref_id              = "count"
         datasource_uid      = var.loki_datasource_uid
-        relative_time_range = { from = local.query_window_seconds, to = 0 }
-        model               = merge(local.loki_model, { refId = "count", expr = local.count_query })
+        relative_time_range = { from = local.query_window_seconds[severity], to = 0 }
+        model               = merge(local.loki_model, { refId = "count", expr = local.count_queries[severity] })
       },
       {
         ref_id              = "latest_error"
         datasource_uid      = var.loki_datasource_uid
-        relative_time_range = { from = local.query_window_seconds, to = 0 }
-        model               = merge(local.loki_model, { refId = "latest_error", expr = local.latest_error_query })
-      },
-      {
-        ref_id              = "threshold"
-        datasource_uid      = var.loki_datasource_uid
-        relative_time_range = { from = local.query_window_seconds, to = 0 }
-        model               = merge(local.loki_model, { refId = "threshold", expr = local.threshold_query })
+        relative_time_range = { from = local.query_window_seconds[severity], to = 0 }
+        model               = merge(local.loki_model, { refId = "latest_error", expr = local.latest_error_queries[severity] })
       },
       {
         ref_id              = "latest_count"
@@ -255,7 +253,7 @@ locals {
           datasource = { type = "__expr__", uid = "__expr__" }
           refId      = "condition"
           type       = "math"
-          expression = "$latest_count > $threshold"
+          expression = "$latest_count > ${local.severity_settings[severity].threshold}"
         }
       },
     ]

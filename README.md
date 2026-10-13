@@ -115,32 +115,36 @@ source, and run this query:
 {service_name="otel-log-demo", severity_text=~"ERROR|FATAL|WARN"}
 ```
 
-You can inspect the configured rule under [Alerting > Alert rules](http://localhost:3000/alerting/list). By
-default, Grafana evaluates it every 10 seconds over a 10-minute window and
-fires when the number of matching events exceeds the threshold for that
-severity:
+You can inspect the three configured rules under [Alerting > Alert rules](http://localhost:3000/alerting/list).
+There is one rule for each severity. By default, Grafana evaluates them every
+10 seconds and fires when the number of matching events in that rule's window
+exceeds its threshold:
 
-| Severity | Alert condition |
-| --- | ---: |
-| FATAL | More than 0 events |
-| ERROR | More than 1 event |
-| WARN | More than 10 events |
+| Severity | Window | Alert condition |
+| --- | ---: | ---: |
+| FATAL | 5 minutes | More than 0 events |
+| ERROR | 10 minutes | More than 1 event |
+| WARN | 10 minutes | More than 10 events |
 
-The rule groups events by service, deployment environment, exception type,
+FATAL does not need the longer aggregation window used by ERROR and WARN, but
+its window remains longer than one minute so that collector buffering or
+delayed Loki ingestion does not cause a fatal event to be missed.
+
+Each rule groups events by service, deployment environment, exception type,
 severity, and a normalized error fingerprint. It uses the latest matching log
 entry to populate the notification details.
 
-## How the alert rule works
+## How the alert rules work
 
-The Terraform configuration in `terraform/locals.tf` builds the alert rule from
-several LogQL queries and Grafana expressions:
+The Terraform configuration in `terraform/locals.tf` builds the three alert
+rules from shared LogQL query templates and Grafana expressions:
 
-1. **Select candidate log entries.** The rule reads WARN, ERROR, and FATAL log
-   entries for the configured `service_name`. A log entry with
+1. **Select candidate log entries.** Each rule reads its WARN, ERROR, or FATAL
+   log entries for the configured `service_name`. A log entry with
    `alert.general_rule.exclude=true` is ignored, allowing a dedicated metric-
    or log-based rule to handle that occurrence instead. Loki stores
-   `severity_text` as an indexed label, so the selector scans only streams for
-   those three severities instead of every log stream for the service.
+   `severity_text` as an indexed label, so each selector scans only streams for
+   its rule's severity instead of every log stream for the service.
 
 2. **Create an error fingerprint.** For typed exceptions with a stack trace,
    the rule removes variable wrapper messages while retaining the stack frames,
@@ -151,17 +155,17 @@ several LogQL queries and Grafana expressions:
    and digits in the log message. This fingerprint becomes the `error_group`
    label.
 
-3. **Count matching occurrences.** The rule counts error occurrences over the
-   previous 10 minutes, grouped by service, deployment environment, error
+3. **Count matching occurrences.** Each rule counts error occurrences over its
+   configured window, grouped by service, deployment environment, error
    fingerprint, exception type, and severity. Grafana compares the count with
-   the threshold for that severity. At each 10-second evaluation, the count and
-   latest-entry queries each scan the selected 10-minute window.
+   that rule's threshold. At each 10-second evaluation, every rule's count and
+   latest-entry queries scan that rule's window.
 
-4. **Attach details from the latest log entry.** A separate query finds the
-   newest log entry in each group and supplies its message, stack trace, and
-   timestamp range to the notification. Those timestamps are used to build a
-   Grafana Explore link showing logs from the same service and deployment
-   environment around the time of the latest entry.
+4. **Attach details from the latest log entry.** A separate query in each rule
+   finds the newest log entry in each group and supplies its message, stack
+   trace, and timestamp range to the notification. Those timestamps are used
+   to build a Grafana Explore link showing logs from the same service and
+   deployment environment around the time of the latest entry.
 
 5. **Choose a runbook.** If the latest log entry has a `runbook_url` attribute,
    the notification uses it. Otherwise, the rule looks for a fallback URL in
