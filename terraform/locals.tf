@@ -12,23 +12,28 @@ locals {
     tonumber(trimsuffix(settings.query_window, "m")) * 60
   }
 
-  # Fallbacks keyed by exception type; log metadata takes precedence.
-  runbook_urls = tomap({
-    "main.databaseError" = "https://example.com/runbooks/database"
-  })
+  latest_error_labels = distinct(concat(
+    [for label in split(",", local.grouping_labels) : trimspace(label)],
+    ["error_message", "exception_stacktrace", "runbook_url", "error_time_from", "error_time_to"],
+    [for rule in var.runbook_fallback_rules : rule.label],
+  ))
   runbook_url_annotation = <<-TEMPLATE
     {{ $runbook := "" -}}
     {{ with $values.latest_error -}}
       {{ with .Labels.runbook_url -}}
         {{ $runbook = . -}}
       {{ end -}}
-    {{ end -}}
-    {{ if not $runbook -}}
-      %{for exception_type, url in local.runbook_urls~}
-        {{ if eq $labels.exception_type ${format("%q", exception_type)} -}}
-          {{ $runbook = ${format("%q", url)} -}}
-        {{ end -}}
-      %{endfor~}
+      {{ if not $runbook -}}
+        {{ $matched := false -}}
+        %{for rule in var.runbook_fallback_rules}
+          {{ range $name, $value := .Labels -}}
+            {{ if and (not $matched) (eq $name ${format("%q", rule.label)}) (${rule.operator} ${format("%q", rule.value)} $value) -}}
+              {{ $runbook = ${format("%q", rule.url)} -}}
+              {{ $matched = true -}}
+            {{ end -}}
+          {{ end -}}
+        %{endfor}
+      {{ end -}}
     {{ end -}}
     {{ $runbook -}}
   TEMPLATE
@@ -167,7 +172,7 @@ locals {
   latest_error_queries = { for severity, log_pipeline in local.log_pipelines : severity => <<-LOGQL
     topk by (${local.grouping_labels}) (
       1,
-      max by (${local.grouping_labels}, error_message, exception_stacktrace, runbook_url, error_time_from, error_time_to) (
+      max by (${join(", ", local.latest_error_labels)}) (
         max_over_time(
           ${indent(6, chomp(log_pipeline))}
           # Include the message for notification display, but not in the labels that identify an alert.

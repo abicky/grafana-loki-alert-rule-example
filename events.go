@@ -30,7 +30,7 @@ type paymentError struct{ message string }
 func (e paymentError) Error() string { return e.message }
 
 func cycleEvents() []event {
-	err := errors.New("configuration is unavailable")
+	err := errors.New("configuration is unavailable: missing required key")
 	criticalErr := errors.New("service cannot continue: required configuration is invalid")
 	metricsErr := errors.New("request failed: monitored by the request error-rate metric")
 	wrappedErr := fmt.Errorf("query failed: %w", databaseError{"connection refused"})

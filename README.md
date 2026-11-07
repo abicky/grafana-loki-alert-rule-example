@@ -168,15 +168,70 @@ rules from shared LogQL query templates and Grafana expressions:
    deployment environment around the time of the latest entry.
 
 5. **Choose a runbook.** If the latest log entry has a `runbook_url` attribute,
-   the notification uses it. Otherwise, the rule looks for a fallback URL in
-   the Terraform local value `local.runbook_urls`, which maps exception types
-   to runbook URLs. If neither exists, the notification omits the runbook link.
+   the notification uses its nonempty value. Otherwise, it selects the first
+   matching rule in `runbook_fallback_rules`. If no rule matches, the URL is
+   empty and the notification omits the runbook link.
 
 6. **Send a grouped notification.** Grafana groups notifications by the alert
    name, folder, and the same labels used by the LogQL aggregation. The Slack
    message includes the latest error, the occurrence count and threshold, the
    stack trace, remaining labels and annotations, and available links to the
    runbook, alert rule, logs, and silence form.
+
+## Runbook fallback rules
+
+`runbook_fallback_rules` is an ordered list of objects with `label`, `operator`,
+`value`, and `url` fields. Configure it in a Terraform `.tfvars` file, for example:
+
+```hcl
+runbook_fallback_rules = [
+  {
+    label    = "exception_type"
+    operator = "eq"
+    value    = "main.databaseError"
+    url      = "https://example.com/runbooks/database"
+  },
+  {
+    label    = "exception_message"
+    operator = "match"
+    value    = "configuration is unavailable"
+    url      = "https://example.com/runbooks/configuration"
+  },
+]
+```
+
+These are also the defaults in `terraform/variables.tf`. The database demo
+exercises the first fallback; the `errors-new` demo emits
+`configuration is unavailable: missing required key` to exercise the second.
+The payment demo supplies an explicit `runbook_url`.
+
+| Operator | Match |
+| --- | --- |
+| `eq` | Label equals `value`. |
+| `ne` | Label differs from `value`. |
+| [`match`](https://grafana.com/docs/grafana/latest/alerting/alerting-rules/templates/reference/#match) | Label matches the Go regular expression `value`; use `^` and `$` to match the whole value. |
+
+Matching is case-sensitive and reads labels from the latest error, using Loki
+label names (for example, `exception_message` for `exception.message`). Missing
+labels never match, including for `ne`; a present empty value is compared
+normally. A nonempty explicit `runbook_url` takes precedence over all fallback
+rules. Otherwise, list order decides the first match, even when its URL is empty.
+Set the list to `[]` to disable fallbacks.
+
+The latest-error query automatically preserves labels referenced by these
+rules. Adding a matcher label does not add it to the occurrence-count query's
+alert identity or to notification grouping. The label must already be available
+in the Loki log entry.
+
+Run the tests with Go and Terraform installed:
+
+```bash
+go test ./...
+```
+
+The tests evaluate the actual Terraform locals in a temporary module, then
+execute the generated annotation as a Go template with Grafana's `match`
+function semantics. They require neither a running stack nor a Slack webhook.
 
 ## FATAL severity handling
 
