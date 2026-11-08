@@ -52,14 +52,29 @@ resource "grafana_rule_group" "exceptions" {
   }
 }
 
+resource "grafana_message_template" "slack" {
+  for_each = {
+    title   = local.slack_title
+    message = local.slack_message
+  }
+
+  name               = "slack.otlp-demo.${each.key}"
+  disable_provenance = true
+  template           = <<-TEMPLATE
+    {{ define "slack.otlp-demo.${each.key}" -}}
+    ${each.value}
+    {{- end }}
+  TEMPLATE
+}
+
 resource "grafana_contact_point" "demo" {
   name               = "otlp-demo-slack"
   disable_provenance = true
 
   slack {
     url                     = var.slack_webhook_url
-    title                   = local.slack_title
-    text                    = local.slack_message
+    title                   = format("{{ template %q . }}", grafana_message_template.slack["title"].name)
+    text                    = format("{{ template %q . }}", grafana_message_template.slack["message"].name)
     disable_resolve_message = true
   }
 }
