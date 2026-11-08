@@ -71,58 +71,49 @@ locals {
   slack_message = <<-TEMPLATE
     {{ range .Alerts -}}
     {{ .Annotations.description }}
-      {{ $hasExplore := and .Annotations.explore_query .Annotations.explore_from .Annotations.explore_to -}}
-      {{ $hasSilence := and .SilenceURL (le (len .SilenceURL) 4000) -}}
-      {{ if or .Annotations.runbook_url .GeneratorURL .DashboardURL $hasExplore $hasSilence }}
+    {{- $hasExplore := and .Annotations.explore_query .Annotations.explore_from .Annotations.explore_to -}}
+    {{- $hasSilence := and .SilenceURL (le (len .SilenceURL) 4000) -}}
+    {{- if or .Annotations.runbook_url .GeneratorURL .DashboardURL $hasExplore $hasSilence }}
     *Actions*
 
-        {{ with .Annotations.runbook_url -}}
-    - <{{ . }}|Go to runbook>
-        {{ end -}}
-        {{ with .GeneratorURL -}}
-    - <{{ . }}|Go to alert rule>
-        {{ end -}}
-        {{ with .DashboardURL -}}
-    - <{{ . }}|Go to dashboard>
-        {{ end -}}
-        {{ if $hasExplore -}}
-          {{/* Use data.ToJSON instead of printf "%q", which can emit Go-only escapes such as \x01 that are invalid in JSON. */ -}}
-          {{ $panes := printf ${format("%q", local.explore_panes_format)} (data.ToJSON .Annotations.explore_query) .Annotations.explore_from .Annotations.explore_to -}}
+    {{ with .Annotations.runbook_url }}- <{{ . }}|Go to runbook>{{ end }}
+    {{ with .GeneratorURL }}- <{{ . }}|Go to alert rule>{{ end }}
+    {{ with .DashboardURL }}- <{{ . }}|Go to dashboard>{{ end }}
+    {{ if $hasExplore -}}
+      {{- /* Use data.ToJSON instead of printf "%q", which can emit Go-only escapes such as \x01 that are invalid in JSON. */ -}}
+      {{- $panes := printf ${format("%q", local.explore_panes_format)} (data.ToJSON .Annotations.explore_query) .Annotations.explore_from .Annotations.explore_to -}}
     - <${trimsuffix(var.grafana_url, "/")}/explore?schemaVersion=1&panes={{ urlquery $panes }}|Explore logs>
-        {{ end -}}
-        {{ if $hasSilence -}}
-    - <{{ .SilenceURL }}|Create silence>
-        {{ end -}}
-      {{ end -}}
-      {{ with .Annotations.stacktrace }}
+    {{ end -}}
+    {{ if $hasSilence }}- <{{ .SilenceURL }}|Create silence>{{ end }}
+    {{ end }}
+    {{ with .Annotations.stacktrace }}
     *Stack trace*
 
     ```
     {{ printf "%.3000s" . }}
     ```
-      {{ end }}
-      {{ $firstLabel := true -}}
-      {{ range $key, $value := .Labels -}}
-        {{ if and (ne $key "error_group") (ne $key "service_name") -}}
-          {{ if $firstLabel -}}
+    {{ end }}
+    {{ $firstLabel := true -}}
+    {{ range $key, $value := .Labels -}}
+      {{- if and (ne $key "error_group") (ne $key "service_name") -}}
+        {{- if $firstLabel -}}
     *Other labels:*
-
-            {{ $firstLabel = false -}}
-          {{ end -}}
+    {{ $firstLabel = false -}}
+        {{- end -}}
     - {{ $key }}: {{ $value }}
-        {{ end -}}
-      {{ end }}
-      {{ $firstAnnotation := true -}}
-      {{ range $key, $value := .Annotations -}}
-        {{ if and (ne $key "summary") (ne $key "description") (ne $key "runbook_url") (ne $key "stacktrace") (ne $key "explore_query") (ne $key "explore_from") (ne $key "explore_to") -}}
-          {{ if $firstAnnotation -}}
+    {{ end -}}
+    {{ end }}
+
+    {{ $firstAnnotation := true -}}
+    {{ range $key, $value := .Annotations -}}
+      {{- if and (ne $key "summary") (ne $key "description") (ne $key "runbook_url") (ne $key "stacktrace") (ne $key "explore_query") (ne $key "explore_from") (ne $key "explore_to") -}}
+        {{- if $firstAnnotation -}}
     *Other annotations:*
-
-            {{ $firstAnnotation = false -}}
-          {{ end -}}
+    {{ $firstAnnotation = false -}}
+        {{- end -}}
     - {{ $key }}: {{ $value }}
-        {{ end -}}
-      {{ end }}
+    {{ end -}}
+    {{ end }}
     {{ end -}}
   TEMPLATE
 

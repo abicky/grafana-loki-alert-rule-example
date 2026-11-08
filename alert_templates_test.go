@@ -464,7 +464,7 @@ func TestSlackMessage(t *testing.T) {
 			alerts: []slackAlert{{
 				Annotations: map[string]string{"description": "Database request failed"},
 			}},
-			wantContains: []string{"Database request failed"},
+			wantContains: []string{"Database request failed\n"},
 			wantAbsent:   []string{"*Actions*", "*Stack trace*", "*Other labels:*", "*Other annotations:*", "<no value>"},
 		},
 		{
@@ -478,11 +478,11 @@ func TestSlackMessage(t *testing.T) {
 				SilenceURL:   "https://example.com/silence",
 			}},
 			wantContains: []string{
-				"*Actions*",
-				"- <https://example.com/runbook|Go to runbook>",
-				"- <https://example.com/rule|Go to alert rule>",
-				"- <https://example.com/dashboard|Go to dashboard>",
-				"- <https://example.com/silence|Create silence>",
+				"\n*Actions*\n",
+				"\n- <https://example.com/runbook|Go to runbook>\n",
+				"\n- <https://example.com/rule|Go to alert rule>\n",
+				"\n- <https://example.com/dashboard|Go to dashboard>\n",
+				"\n- <https://example.com/silence|Create silence>\n",
 			},
 			wantAbsent: []string{"Explore logs", "*Other annotations:*"},
 		},
@@ -491,7 +491,7 @@ func TestSlackMessage(t *testing.T) {
 			alerts: []slackAlert{{
 				Annotations: map[string]string{"runbook_url": "https://example.com/runbook"},
 			}},
-			wantContains: []string{"*Actions*", "- <https://example.com/runbook|Go to runbook>"},
+			wantContains: []string{"\n*Actions*\n", "\n- <https://example.com/runbook|Go to runbook>\n"},
 			wantAbsent:   []string{"Go to alert rule", "Go to dashboard", "Explore logs", "Create silence"},
 		},
 		{
@@ -499,7 +499,7 @@ func TestSlackMessage(t *testing.T) {
 			alerts: []slackAlert{{
 				SilenceURL: maximumSilenceURL,
 			}},
-			wantContains: []string{"*Actions*", "- <" + maximumSilenceURL + "|Create silence>"},
+			wantContains: []string{"\n*Actions*\n", "\n- <" + maximumSilenceURL + "|Create silence>\n"},
 		},
 		{
 			name: "oversized silence URL omitted",
@@ -514,15 +514,15 @@ func TestSlackMessage(t *testing.T) {
 				GeneratorURL: "https://example.com/rule",
 				SilenceURL:   maximumSilenceURL + "s",
 			}},
-			wantContains: []string{"*Actions*", "- <https://example.com/rule|Go to alert rule>"},
+			wantContains: []string{"\n*Actions*\n", "\n- <https://example.com/rule|Go to alert rule>\n"},
 			wantAbsent:   []string{"Create silence", maximumSilenceURL},
 		},
 		{
 			name: "stack trace",
 			alerts: []slackAlert{{
-				Annotations: map[string]string{"stacktrace": "database.go:42\nmain.go:10"},
+				Annotations: map[string]string{"stacktrace": "database.go:20\nmain.go:10"},
 			}},
-			wantContains: []string{"*Stack trace*", "```\ndatabase.go:42\nmain.go:10\n```"},
+			wantContains: []string{"\n*Stack trace*\n", "\n```\n", "\ndatabase.go:20\n", "\nmain.go:10\n"},
 			wantAbsent:   []string{"*Actions*", "*Other annotations:*"},
 		},
 		{
@@ -530,7 +530,7 @@ func TestSlackMessage(t *testing.T) {
 			alerts: []slackAlert{{
 				Annotations: map[string]string{"stacktrace": longStack},
 			}},
-			wantContains: []string{"```\n" + strings.Repeat("\u3042", 3000) + "\n```"},
+			wantContains: []string{"\n```\n", "\n" + strings.Repeat("\u3042", 3000) + "\n"},
 			wantAbsent:   []string{longStack},
 		},
 		{
@@ -538,27 +538,55 @@ func TestSlackMessage(t *testing.T) {
 			alerts: []slackAlert{{
 				Labels: map[string]string{"service_name": "hidden-service", "error_group": "hidden-fingerprint"},
 				Annotations: map[string]string{
-					"summary": "hidden-summary", "description": "Visible description",
-					"explore_query": "hidden-query", "explore_from": "123",
+					"summary":       "hidden-summary",
+					"description":   "Visible description",
+					"explore_query": "hidden-query",
+					"explore_from":  "123",
 				},
 			}},
-			wantContains: []string{"Visible description"},
+			wantContains: []string{"Visible description\n"},
 			wantAbsent: []string{
 				"hidden-", "*Actions*", "*Other labels:*", "*Other annotations:*",
 			},
 		},
 		{
+			name: "additional labels only",
+			alerts: []slackAlert{{
+				Labels: map[string]string{"severity": "ERROR", "team": "payments"},
+			}},
+			wantContains: []string{
+				"\n*Other labels:*\n", "\n- severity: ERROR\n", "\n- team: payments\n",
+			},
+			wantAbsent: []string{"*Other annotations:*"},
+		},
+		{
+			name: "additional annotations only",
+			alerts: []slackAlert{{
+				Annotations: map[string]string{"owner": "on-call", "ticket": "OPS-1"},
+			}},
+			wantContains: []string{
+				"\n*Other annotations:*\n", "\n- owner: on-call\n", "\n- ticket: OPS-1\n",
+			},
+			wantAbsent: []string{"*Other labels:*"},
+		},
+		{
 			name: "additional labels and annotations",
 			alerts: []slackAlert{{
 				Labels: map[string]string{
-					"service_name": "hidden-service", "error_group": "hidden-fingerprint",
-					"severity": "ERROR", "team": "payments",
+					"service_name": "hidden-service",
+					"error_group":  "hidden-fingerprint",
+					"severity":     "ERROR",
+					"team":         "payments",
 				},
-				Annotations: map[string]string{"owner": "on-call", "ticket": "OPS-42"},
+				Annotations: map[string]string{"owner": "on-call", "ticket": "OPS-1"},
 			}},
 			wantContains: []string{
-				"*Other labels:*", "- severity: ERROR", "- team: payments",
-				"*Other annotations:*", "- owner: on-call", "- ticket: OPS-42",
+				"\n*Other labels:*\n",
+				"\n- severity: ERROR\n",
+				"\n- team: payments\n",
+				"\n*Other annotations:*\n",
+				"\n- owner: on-call\n",
+				"\n- ticket: OPS-1\n",
 			},
 			wantAbsent: []string{"hidden-"},
 		},
@@ -566,17 +594,38 @@ func TestSlackMessage(t *testing.T) {
 			name: "multiple alerts keep their own details",
 			alerts: []slackAlert{
 				{
+					Labels: map[string]string{"severity": "ERROR", "team": "payments"},
 					Annotations: map[string]string{
-						"description": "First failure", "runbook_url": "https://example.com/first",
+						"description": "First failure",
+						"runbook_url": "https://example.com/first",
+						"owner":       "on-call",
+						"ticket":      "OPS-1",
 					},
 				},
 				{
+					Labels: map[string]string{"severity": "WARN", "team": "platform"},
 					Annotations: map[string]string{
 						"description": "Second failure",
+						"owner":       "support",
+						"ticket":      "OPS-2",
 					},
 				},
 			},
-			wantContains: []string{"First failure", "Go to runbook", "Second failure"},
+			wantContains: []string{
+				"First failure\n",
+				"\n- <https://example.com/first|Go to runbook>\n",
+				"\nSecond failure\n",
+				"\n*Other labels:*\n",
+				"\n- severity: ERROR\n",
+				"\n- team: payments\n",
+				"\n*Other annotations:*\n",
+				"\n- owner: on-call\n",
+				"\n- ticket: OPS-1\n",
+				"\n- severity: WARN\n",
+				"\n- team: platform\n",
+				"\n- owner: support\n",
+				"\n- ticket: OPS-2\n",
+			},
 		},
 	}
 
