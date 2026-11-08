@@ -75,17 +75,20 @@ locals {
     {{- $hasSilence := and .SilenceURL (le (len .SilenceURL) 4000) -}}
     {{- if or .Annotations.runbook_url .GeneratorURL .DashboardURL $hasExplore $hasSilence }}
     *Actions*
-
-    {{ with .Annotations.runbook_url }}- <{{ . }}|Go to runbook>{{ end }}
-    {{ with .GeneratorURL }}- <{{ . }}|Go to alert rule>{{ end }}
-    {{ with .DashboardURL }}- <{{ . }}|Go to dashboard>{{ end }}
+    {{ with .Annotations.runbook_url }}- <{{ . }}|Go to runbook>
+    {{ end -}}
+    {{ with .GeneratorURL }}- <{{ . }}|Go to alert rule>
+    {{ end -}}
+    {{ with .DashboardURL }}- <{{ . }}|Go to dashboard>
+    {{ end -}}
     {{ if $hasExplore -}}
       {{- /* Use data.ToJSON instead of printf "%q", which can emit Go-only escapes such as \x01 that are invalid in JSON. */ -}}
       {{- $panes := printf ${format("%q", local.explore_panes_format)} (data.ToJSON .Annotations.explore_query) .Annotations.explore_from .Annotations.explore_to -}}
     - <${trimsuffix(var.grafana_url, "/")}/explore?schemaVersion=1&panes={{ urlquery $panes }}|Explore logs>
     {{ end -}}
-    {{ if $hasSilence }}- <{{ .SilenceURL }}|Create silence>{{ end }}
-    {{ end }}
+    {{ if $hasSilence }}- <{{ .SilenceURL }}|Create silence>
+    {{ end -}}
+    {{ end -}}
     {{ with .Annotations.stacktrace }}
     *Stack trace*
 

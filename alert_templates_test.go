@@ -487,6 +487,18 @@ func TestSlackMessage(t *testing.T) {
 			wantAbsent: []string{"Explore logs", "*Other annotations:*"},
 		},
 		{
+			name: "missing action links leave no empty lines",
+			alerts: []slackAlert{{
+				Annotations:  map[string]string{"stacktrace": "database.go:20"},
+				GeneratorURL: "https://example.com/rule",
+				SilenceURL:   "https://example.com/silence",
+			}},
+			wantContains: []string{
+				"*Actions*\n\n- <https://example.com/rule|Go to alert rule>\n- <https://example.com/silence|Create silence>\n\n*Stack trace*\n",
+			},
+			wantAbsent: []string{"Go to runbook", "Go to dashboard", "Explore logs"},
+		},
+		{
 			name: "runbook is the only action",
 			alerts: []slackAlert{{
 				Annotations: map[string]string{"runbook_url": "https://example.com/runbook"},
