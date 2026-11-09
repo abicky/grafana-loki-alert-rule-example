@@ -69,11 +69,12 @@ locals {
   # Bound variable-length fields because Slack may truncate long notifications;
   # truncation has been observed at roughly 8,000 characters.
   slack_message = <<-TEMPLATE
-    {{ range .Alerts -}}
+    {{ range $index, $_ := .Alerts -}}
+    {{ if $index }}{{ "--------------------------\n" }}{{ end -}}
     {{ .Annotations.description }}
-    {{- $hasExplore := and .Annotations.explore_query .Annotations.explore_from .Annotations.explore_to -}}
-    {{- $hasSilence := and .SilenceURL (le (len .SilenceURL) 4000) -}}
-    {{- if or .Annotations.runbook_url .GeneratorURL .DashboardURL $hasExplore $hasSilence }}
+    {{ $hasExplore := and .Annotations.explore_query .Annotations.explore_from .Annotations.explore_to -}}
+    {{ $hasSilence := and .SilenceURL (le (len .SilenceURL) 4000) -}}
+    {{ if or .Annotations.runbook_url .GeneratorURL .DashboardURL $hasExplore $hasSilence -}}
     *Actions*
     {{ with .Annotations.runbook_url }}- <{{ . }}|Go to runbook>
     {{ end -}}
@@ -89,13 +90,12 @@ locals {
     {{ if $hasSilence }}- <{{ .SilenceURL }}|Create silence>
     {{ end -}}
     {{ end -}}
-    {{ with .Annotations.stacktrace }}
+    {{ with .Annotations.stacktrace -}}
     *Stack trace*
-
     ```
     {{ printf "%.3000s" . }}
     ```
-    {{ end }}
+    {{ end -}}
     {{ $firstLabel := true -}}
     {{ range $key, $value := .Labels -}}
       {{- if and (ne $key "error_group") (ne $key "service_name") -}}
@@ -105,8 +105,7 @@ locals {
         {{- end -}}
     - {{ $key }}: {{ $value }}
     {{ end -}}
-    {{ end }}
-
+    {{ end -}}
     {{ $firstAnnotation := true -}}
     {{ range $key, $value := .Annotations -}}
       {{- if and (ne $key "summary") (ne $key "description") (ne $key "runbook_url") (ne $key "stacktrace") (ne $key "explore_query") (ne $key "explore_from") (ne $key "explore_to") -}}
@@ -116,7 +115,7 @@ locals {
         {{- end -}}
     - {{ $key }}: {{ $value }}
     {{ end -}}
-    {{ end }}
+    {{ end -}}
     {{ end -}}
   TEMPLATE
 

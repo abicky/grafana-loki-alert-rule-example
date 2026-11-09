@@ -464,9 +464,6 @@ func TestSlackMessage(t *testing.T) {
 				Annotations: map[string]string{"description": "Database request failed"},
 			}},
 			want: `Database request failed
-
-
-
 `,
 		},
 		{
@@ -485,10 +482,6 @@ func TestSlackMessage(t *testing.T) {
 - <https://example.com/rule|Go to alert rule>
 - <https://example.com/dashboard|Go to dashboard>
 - <https://example.com/silence|Create silence>
-
-
-
-
 `,
 		},
 		{
@@ -502,16 +495,10 @@ func TestSlackMessage(t *testing.T) {
 *Actions*
 - <https://example.com/rule|Go to alert rule>
 - <https://example.com/silence|Create silence>
-
 *Stack trace*
-
 ` + "```" + `
 database.go:20
 ` + "```" + `
-
-
-
-
 `,
 		},
 		{
@@ -522,10 +509,6 @@ database.go:20
 			want: `<no value>
 *Actions*
 - <https://example.com/runbook|Go to runbook>
-
-
-
-
 `,
 		},
 		{
@@ -536,10 +519,6 @@ database.go:20
 			want: `<no value>
 *Actions*
 - <` + maximumSilenceURL + `|Create silence>
-
-
-
-
 `,
 		},
 		{
@@ -548,9 +527,6 @@ database.go:20
 				SilenceURL: maximumSilenceURL + "s",
 			}},
 			want: `<no value>
-
-
-
 `,
 		},
 		{
@@ -562,10 +538,6 @@ database.go:20
 			want: `<no value>
 *Actions*
 - <https://example.com/rule|Go to alert rule>
-
-
-
-
 `,
 		},
 		{
@@ -575,15 +547,10 @@ database.go:20
 			}},
 			want: `<no value>
 *Stack trace*
-
 ` + "```" + `
 database.go:20
 main.go:10
 ` + "```" + `
-
-
-
-
 `,
 		},
 		{
@@ -593,14 +560,9 @@ main.go:10
 			}},
 			want: `<no value>
 *Stack trace*
-
 ` + "```" + `
 ` + strings.Repeat("\u3042", 3000) + `
 ` + "```" + `
-
-
-
-
 `,
 		},
 		{
@@ -615,9 +577,6 @@ main.go:10
 				},
 			}},
 			want: `Visible description
-
-
-
 `,
 		},
 		{
@@ -629,9 +588,6 @@ main.go:10
 *Other labels:*
 - severity: ERROR
 - team: payments
-
-
-
 `,
 		},
 		{
@@ -640,12 +596,9 @@ main.go:10
 				Annotations: map[string]string{"owner": "on-call", "ticket": "OPS-1"},
 			}},
 			want: `<no value>
-
-
 *Other annotations:*
 - owner: on-call
 - ticket: OPS-1
-
 `,
 		},
 		{
@@ -663,12 +616,9 @@ main.go:10
 *Other labels:*
 - severity: ERROR
 - team: payments
-
-
 *Other annotations:*
 - owner: on-call
 - ticket: OPS-1
-
 `,
 		},
 		{
@@ -695,26 +645,20 @@ main.go:10
 			want: `First failure
 *Actions*
 - <https://example.com/first|Go to runbook>
-
 *Other labels:*
 - severity: ERROR
 - team: payments
-
-
 *Other annotations:*
 - owner: on-call
 - ticket: OPS-1
-
+--------------------------
 Second failure
 *Other labels:*
 - severity: WARN
 - team: platform
-
-
 *Other annotations:*
 - owner: support
 - ticket: OPS-2
-
 `,
 		},
 	}
