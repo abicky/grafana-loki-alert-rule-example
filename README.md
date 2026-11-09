@@ -233,6 +233,23 @@ The tests evaluate the actual Terraform locals in a temporary module, then
 execute the generated annotation as a Go template with Grafana's `match`
 function semantics. They require neither a running stack nor a Slack webhook.
 
+## Preview messages in Slack
+
+With jq and curl installed, save the message you want to inspect in a UTF-8
+text file, then send it to the Slack incoming webhook in `SLACK_WEBHOOK_URL`:
+
+```bash
+./scripts/send-slack-test-message.sh /tmp/message.txt
+```
+
+The script preserves the file contents, including trailing newlines, in
+`attachments[0].text`. It matches the attachment format and HTTP headers used
+by [Grafana's Slack notifier](https://github.com/grafana/alerting/blob/e1a167a201a8/receivers/slack/v1/slack.go#L315-L335),
+using a firing-alert color and the Grafana 13.2.3 footer. The title is
+`Slack template test` and links to `/alerting/list` under `TF_VAR_grafana_url`
+(default `http://localhost:3000`). The script does not add a `mrkdwn_in`
+override. No running Grafana instance, Go, or Terraform is needed.
+
 ## FATAL severity handling
 
 `otelslog` does not provide a predefined FATAL level. The Go application
