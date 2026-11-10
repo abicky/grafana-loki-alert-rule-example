@@ -106,6 +106,11 @@ silence form.
 > not commit it. Anonymous Admin access is also intended only for this local
 > demo.
 
+To configure the webhook once in Grafana and keep it outside Terraform state,
+see [Contact points with secrets managed outside Terraform](docs/contact-points-with-external-secrets.md).
+That setup uses an imported `grafana_apps_generic_resource` Receiver with a
+non-secret `secureFields.url` retention marker.
+
 ## Inspect the logs and alerts
 
 Open [Grafana Explore](http://localhost:3000/explore), select the Loki data
